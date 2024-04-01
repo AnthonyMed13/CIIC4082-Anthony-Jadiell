@@ -21,22 +21,12 @@
                 "reveal": "silent"
             }
         },
-		{
-            "label": "Assemble controllers",
-            "type": "shell",
-            "command": "ca65",
-            "args": ["src/controllers.asm"],
-            "group": "build",
-            "presentation": {
-                "reveal": "silent"
-            }
-        },
         {
             "label": "Link NES file",
             "type": "shell",
             "command": "ld65",
-            "args": ["src/backgrounds.o", "src/reset.o", "src/controllers.o", "-C", "nes.cfg", "-o", "input.nes"],
-            "dependsOn": ["Assemble backgrounds", "Assemble controllers", "Assemble reset"],
+            "args": ["src/backgrounds.o", "src/reset.o", "-C", "nes.cfg", "-o", "task2.nes"],
+            "dependsOn": ["Assemble backgrounds", "Assemble reset"],
             "group": {
                 "kind": "build",
                 "isDefault": true
