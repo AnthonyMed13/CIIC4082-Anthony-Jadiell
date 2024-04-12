@@ -3,7 +3,10 @@
 
 
 .segment "ZEROPAGE"
-	zptemp: .res 2
+  zptemp: .res 1
+  zptemp2: .res 1
+  zptemp3: .res 2
+  world_selector: .res 1
 	player1_x: .res 1
   player1_cs: .res 1
 	player1_y: .res 1
@@ -14,9 +17,11 @@
 	player1_llt : .res 1
 	player1_lrt : .res 1
 	frame_counter1 : .res 1
+  scroll: .res 1
+  ppuctrl_settings: .res 1
   pad1: .res 1
 	.exportzp player1_x, player1_y, player1_dir, player1_ws, player1_cs, player1_ult, player1_urt, player1_llt, player1_lrt
-	.exportzp frame_counter1, pad1
+	.exportzp frame_counter1, pad1, world_selector
 .segment "CODE"
 
 .proc irq_handler
@@ -32,13 +37,32 @@
   STA OAMDMA
 
 ; read controller
+
+
   JSR read_controller1
 
   JSR update_player1
   JSR draw_players
-	LDA #$00
-	STA $2005
-	STA $2005
+	; LDA #$00
+	; STA $2005
+	; STA $2005
+
+	LDA scroll
+	CMP #$FF ; did we scroll to the end of a nametable?
+	BNE set_scroll_positions
+  JMP skips
+
+set_scroll_positions:
+      INC scroll
+      ; LDA scroll
+      ; CMP #$FF ; did we scroll to the end of a nametable?
+	    ; BCS skips
+      ; INC scroll
+      LDA scroll
+      STA PPUSCROLL
+      LDA #$00 ; X scroll first
+      STA PPUSCROLL
+skips:
   RTI
 .endproc
 
@@ -46,6 +70,9 @@
 
 .export main
 .proc main
+  LDA #$00
+  STA scroll
+
   ; write a palette
   LDX PPUSTATUS
   LDX #$3f
@@ -70,115 +97,568 @@ load_palettes:
 ;   BNE load_sprites
 
 ; write background data
-LDA PPUSTATUS
-LDA #$20
-STA PPUADDR
+LDX #$00
+STX zptemp2
+
+LDA #$10        ; Load the low byte (10 in hex)
+STA zptemp3       ; Store it in ztemp (low byte)
+LDA #$00        ; Load the high byte (0, since 10 is less than 256)
+STA zptemp3+1     ; Store it in ztemp+1 (high byte)
+
 LDA #$00
-STA PPUADDR
+STA zptemp
 
-; low byte of bg address
-LDA #<bg
-STA zptemp            
-LDA #>bg
-; high byte of bg address
-STA zptemp+1
-; initialize X and Y to 0
-LDY #0
-LDX #0
+LDA world_selector
+CMP #$01
+BNE FirstWorld
+JMP SecondWorld
 
-@loop:
-    LDA (zptemp), y
-    STA PPUDATA
-    INY
-    BNE @loop_skip_INX ; skip the next instruction if we dont want to increment high byte
+
+FirstWorld:
+  OuterLoop:
+  LDA zptemp
+    CMP #$00
+      BNE Second
+      LDA PPUSTATUS
+      LDA #$20
+      STA PPUADDR    
+      LDA #$00
+      STA PPUADDR  
+      JMP Start
+
+    Second:
+      CMP #$01
+      BNE Third
+        LDA PPUSTATUS
+        LDA #$20  
+        STA PPUADDR    
+        LDA #$40
+        STA PPUADDR  
+      JMP Start
+    Third:
+      CMP #$02
+      BNE Fourth
+        LDA PPUSTATUS
+        LDA #$20  
+        STA PPUADDR    
+        LDA #$80
+        STA PPUADDR  
+      JMP Start
+    Fourth:
+      CMP #$03
+      BNE Fifth
+        LDA PPUSTATUS
+        LDA #$20
+        STA PPUADDR    
+        LDA #$C0
+        STA PPUADDR  
+      JMP Start
+    Fifth:
+      CMP #$04
+      BNE Sixth
+        LDA PPUSTATUS
+        LDA #$21
+        STA PPUADDR    
+        LDA #$00
+        STA PPUADDR  
+      JMP Start
+    Sixth:
+      CMP #$05
+      BNE Seventh
+        LDA PPUSTATUS
+        LDA #$21
+        STA PPUADDR    
+        LDA #$40
+        STA PPUADDR  
+      JMP Start
+    Seventh:
+      CMP #$06
+      BNE Eight
+        LDA PPUSTATUS
+        LDA #$21
+        STA PPUADDR    
+        LDA #$80
+        STA PPUADDR  
+      JMP Start
+    Eight:
+      CMP #$07
+      BNE Ninth
+        LDA PPUSTATUS
+        LDA #$21
+        STA PPUADDR    
+        LDA #$C0  
+        STA PPUADDR  
+      JMP Start
+    Ninth:
+      CMP #$08
+      BNE Start
+        LDA PPUSTATUS
+        LDA #$22 
+        STA PPUADDR    
+        LDA #$00
+        STA PPUADDR  
+      JMP Start
+      
+    Start:
+      LDY #$00
+
+    LoopAgain:   
+      LDX zptemp2
+      Loop:  
+          LDA bg,X       
+          STA PPUDATA 
+          LDA bg,X       
+          STA PPUDATA    
+          INX           
+          CPX zptemp3  
+          BNE Loop
+      INY
+      CPY #$02
+      BNE LoopAgain
+    
+    LDA zptemp3       ; Load the low byte of ztemp
+    CLC             ; Clear the carry flag before addition
+    ADC #$10      ; Add 30 (1E in hex) to the accumulator
+    STA zptemp3       ; Store the result back in ztemp
+
+    LDA zptemp3+1     ; Load the high byte of ztemp
+    ADC #$00        ; Add any carry from the previous addition
+    STA zptemp3+1     ; Store the result back in ztemp+1
+
+    STX zptemp2 
+
+    LDA zptemp
+    CLC       ; Clear the carry flag to ensure clean addition
+    ADC #$01  ; Add with carry the value 1 to the accumulator
+    STA zptemp
+
+    CMP #$0F 
+    BEQ END
+
+    JMP OuterLoop
+  END:
+  LDX #$00
+  LDA PPUSTATUS    ; Reset the address latch
+  LDA #$23         ; High byte of $23C0
+  STA PPUADDR
+  LDA #$C0         ; Low byte of $23C0
+  STA PPUADDR
+
+  LoadAttribute:
+    LDA attribute, X        ; Load an attribute byte (example data)
+    STA PPUDATA      ; Write it to PPU
     INX
-    INC zptemp+1 ; increment high byte of pointer
-@loop_skip_INX:
-    CPX #>1024 ; comparing high byte       
-    BNE @loop  ; continue loop if high byte of X is not beyond 1024
-    CPY #<1024 ; comparing low byte
-    BNE @loop  ; continue loop if low byte of Y is less than 1024
+    CPX #$40
+    BNE LoadAttribute
 
 
+  LDX #$00
+  STX zptemp2
+
+  LDA #$10        ; Load the low byte (10 in hex)
+  STA zptemp3       ; Store it in ztemp (low byte)
+  LDA #$00        ; Load the high byte (0, since 10 is less than 256)
+  STA zptemp3+1     ; Store it in ztemp+1 (high byte)
+
+  LDA #$00
+  STA zptemp
+
+  OuterLoop1:
+    CMP #$00
+      BNE Second1
+      LDA PPUSTATUS
+      LDA #$24
+      STA PPUADDR    
+      LDA #$00
+      STA PPUADDR  
+      JMP Start1
+
+    Second1:
+      CMP #$01
+      BNE Third1
+        LDA PPUSTATUS
+        LDA #$24
+        STA PPUADDR    
+        LDA #$40
+        STA PPUADDR  
+      JMP Start1
+    Third1:
+      CMP #$02
+      BNE Fourth1
+        LDA PPUSTATUS
+        LDA #$24  
+        STA PPUADDR    
+        LDA #$80
+        STA PPUADDR  
+      JMP Start1
+    Fourth1:
+      CMP #$03
+      BNE Fifth1
+        LDA PPUSTATUS
+        LDA #$24
+        STA PPUADDR    
+        LDA #$C0
+        STA PPUADDR  
+      JMP Start1
+    Fifth1:
+      CMP #$04
+      BNE Sixth1
+        LDA PPUSTATUS
+        LDA #$25
+        STA PPUADDR    
+        LDA #$00
+        STA PPUADDR  
+      JMP Start1
+    Sixth1:
+      CMP #$05
+      BNE Seventh1
+        LDA PPUSTATUS
+        LDA #$25
+        STA PPUADDR    
+        LDA #$40
+        STA PPUADDR  
+      JMP Start1
+    Seventh1:
+      CMP #$06
+      BNE Eight1
+        LDA PPUSTATUS
+        LDA #$25
+        STA PPUADDR    
+        LDA #$80
+        STA PPUADDR  
+      JMP Start1
+    Eight1:
+      CMP #$07
+      BNE Ninth1
+        LDA PPUSTATUS
+        LDA #$25
+        STA PPUADDR    
+        LDA #$C0  
+        STA PPUADDR  
+      JMP Start1
+
+    Ninth1:
+      CMP #$08
+      BNE Start1
+        LDA PPUSTATUS
+        LDA #$26 
+        STA PPUADDR    
+        LDA #$00
+        STA PPUADDR  
+      JMP Start1
+      
+    Start1:
+      LDY #$00
+
+    LoopAgain1:   
+      LDX zptemp2
+      Loop1:  
+          LDA bg1,X       
+          STA PPUDATA 
+          LDA bg1,X       
+          STA PPUDATA    
+          INX           
+          CPX zptemp3  
+          BNE Loop1
+      INY
+      CPY #$02
+      BNE LoopAgain1
+    
+    LDA zptemp3       ; Load the low byte of ztemp
+    CLC             ; Clear the carry flag before addition
+    ADC #$10      ; Add 30 (1E in hex) to the accumulator
+    STA zptemp3       ; Store the result back in ztemp
+
+    LDA zptemp3+1     ; Load the high byte of ztemp
+    ADC #$00        ; Add any carry from the previous addition
+    STA zptemp3+1     ; Store the result back in ztemp+1
+
+    STX zptemp2 
+
+    LDA zptemp
+    CLC       ; Clear the carry flag to ensure clean addition
+    ADC #$01  ; Add with carry the value 1 to the accumulator
+    STA zptemp
+
+    CMP #$0F 
+    BEQ END1
+
+    JMP OuterLoop1
+    END1:
+
+  LDX #$00
+  LDA PPUSTATUS    ; Reset the address latchss
+  LDA #$27         ; High byte of $23C0
+  STA PPUADDR
+  LDA #$C0         ; Low byte of $23C0
+  STA PPUADDR
+
+  LoadAttribute1:
+    LDA attribute1, X        ; Load an attribute byte (example data)
+    STA PPUDATA      ; Write it to PPU
+    INX
+    CPX #$40
+    BNE LoadAttribute1
+
+  JMP Stopbg
+
+SecondWorld:
+; vblankwait3:       ; wait for another vblank before continuing
+;   BIT PPUSTATUS
+;   BPL vblankwait3
+;   LDX #$00
+;   STX zptemp2
+
+;   LDA #$10        ; Load the low byte (10 in hex)
+;   STA zptemp3       ; Store it in ztemp (low byte)
+;   LDA #$00        ; Load the high byte (0, since 10 is less than 256)
+;   STA zptemp3+1     ; Store it in ztemp+1 (high byte)
+
+;   LDA #$00
+;   STA zptemp
+;     OuterLoop2:
+;       CMP #$00
+;         BNE Second2
+;         LDA PPUSTATUS
+;         LDA #$20
+;         STA PPUADDR    
+;         LDA #$00 
+;         STA PPUADDR  
+;         JMP Start2
+
+;       Second2:
+;         CMP #$01
+;         BNE Third2
+;           LDA PPUSTATUS
+;           LDA #$20  
+;           STA PPUADDR    
+;           LDA #$40
+;           STA PPUADDR  
+;         JMP Start2
+;       Third2:
+;         CMP #$02
+;         BNE Fourth2
+;           LDA PPUSTATUS
+;           LDA #$20  
+;           STA PPUADDR    
+;           LDA #$80
+;           STA PPUADDR  
+;         JMP Start2
+;       Fourth2:
+;         CMP #$03
+;         BNE Fifth2
+;           LDA PPUSTATUS
+;           LDA #$20
+;           STA PPUADDR    
+;           LDA #$C0
+;           STA PPUADDR  
+;         JMP Start2
+;       Fifth2:
+;         CMP #$04
+;         BNE Sixth2
+;           LDA PPUSTATUS
+;           LDA #$21
+;           STA PPUADDR    
+;           LDA #$00
+;           STA PPUADDR  
+;         JMP Start2
+;       Sixth2:
+;         CMP #$05
+;         BNE Seventh2
+;           LDA PPUSTATUS
+;           LDA #$21
+;           STA PPUADDR    
+;           LDA #$40
+;           STA PPUADDR  
+;         JMP Start2
+;       Seventh2:
+;         CMP #$06
+;         BNE Eight2
+;           LDA PPUSTATUS
+;           LDA #$21
+;           STA PPUADDR    
+;           LDA #$80
+;           STA PPUADDR  
+;         JMP Start2
+;       Eight2:
+;         CMP #$07
+;         BNE Ninth2
+;           LDA PPUSTATUS
+;           LDA #$21
+;           STA PPUADDR    
+;           LDA #$C0  
+;           STA PPUADDR  
+;         JMP Start2
+;       Ninth2:
+;         CMP #$08
+;         BNE Start2
+;           LDA PPUSTATUS
+;           LDA #$22 
+;           STA PPUADDR    
+;           LDA #$00
+;           STA PPUADDR  
+;         JMP Start2
+        
+;       Start2:
+;         LDY #$00
+
+;       LoopAgain2:   
+;         LDX zptemp2
+;         Loop2:  
+;             LDA bg2,X       
+;             STA PPUDATA 
+;             LDA bg2,X       
+;             STA PPUDATA    
+;             INX           
+;             CPX zptemp3  
+;             BNE Loop2
+;         INY
+;         CPY #$02
+;         BNE LoopAgain2
+      
+;       LDA zptemp3       ; Load the low byte of ztemp
+;       CLC             ; Clear the carry flag before addition
+;       ADC #$10      ; Add 30 (1E in hex) to the accumulator
+;       STA zptemp3       ; Store the result back in ztemp
+
+;       LDA zptemp3+1     ; Load the high byte of ztemp
+;       ADC #$00        ; Add any carry from the previous addition
+;       STA zptemp3+1     ; Store the result back in ztemp+1
+
+;       STX zptemp2 
+
+;       LDA zptemp
+;       CLC       ; Clear the carry flag to ensure clean addition
+;       ADC #$01  ; Add with carry the value 1 to the accumulator
+;       STA zptemp
+
+;       CMP #$0F 
+;       BEQ END2
+
+;       JMP OuterLoop2
+;     END2:
+
+;     LDX #$00
+;     LDA PPUSTATUS    ; Reset the address latch
+;     LDA #$23         ; High byte of $23C0
+;     STA PPUADDR
+;     LDA #$C0         ; Low byte of $23C0
+;     STA PPUADDR
+
+;     LoadAttribute2:
+;       LDA attribute2, X        ; Load an attribute byte (example data)
+;       STA PPUDATA      ; Write it to PPU
+;       INX
+;       CPX #$40
+;       BNE LoadAttribute2
+
+Stopbg:
 vblankwait:       ; wait for another vblank before continuing
   BIT PPUSTATUS
   BPL vblankwait
 
   LDA #%10010000  ; turn on NMIs, sprites use first pattern table
+  STA ppuctrl_settings
   STA PPUCTRL
   LDA #%00011110  ; turn on screen
   STA PPUMASK
+
+  LDA #$00
+  STA PPUSCROLL
+  STA PPUSCROLL
 
 forever:
   JMP forever
 
 ;Background data
 bg:
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$70,$00,$00,$00,$a2,$00,$a4,$a5,$a6,$a7
-	.byte $a8,$a9,$aa,$ab,$ac,$7a,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$02,$03,$04
-	.byte $05,$06,$07,$08,$09,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$11,$12,$00,$00
-	.byte $00,$16,$17,$18,$19,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$13,$14,$00,$00
-	.byte $00,$00,$ba,$bb,$bc,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$02,$20,$21
-	.byte $22,$23,$24,$08,$09,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$11,$12,$30,$31
-	.byte $32,$33,$34,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$13,$14,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-	.byte $ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff
-	.byte $ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$5f,$5f,$5f,$df,$ff,$ff
-	.byte $ff,$ff,$f7,$55,$50,$df,$ff,$ff,$ff,$ff,$f7,$f4,$f5,$fd,$ff,$ff
-	.byte $ff,$ff,$ff,$fc,$ff,$ff,$ff,$ff,$0f,$0f,$0f,$0f,$0f,$0f,$0f,$0f
+  .byte $03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03
+  .byte $03,$00,$00,$00,$00,$00,$03,$16,$14,$00,$00,$00,$00,$00,$00,$00
+  .byte $03,$00,$03,$03,$03,$00,$03,$03,$03,$03,$03,$03,$03,$03,$14,$03
+  .byte $03,$14,$03,$16,$03,$00,$00,$00,$00,$00,$14,$00,$00,$00,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$03,$03,$03,$03,$03,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$00,$00,$00,$00,$03,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$14,$03,$03,$00,$00,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$00,$03,$03,$03,$03,$03,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$00,$03,$14,$00,$00,$00,$03,$00,$03
+  .byte $03,$14,$03,$00,$03,$00,$03,$00,$03,$16,$03,$03,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$00,$03,$03,$03,$03,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$14,$03,$00,$00,$00,$00,$14,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$03,$03,$03,$03,$03,$03,$03,$00,$03
+  .byte $03,$00,$03,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$03
+  .byte $03,$03,$03,$16,$16,$16,$16,$16,$16,$16,$16,$16,$16,$16,$16,$03
 
+bg1:
+  .byte $03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03
+  .byte $00,$00,$00,$14,$00,$00,$14,$00,$00,$00,$00,$00,$00,$14,$00,$03
+  .byte $16,$00,$03,$00,$16,$00,$03,$00,$03,$03,$03,$00,$03,$03,$03,$03
+  .byte $16,$00,$03,$00,$03,$03,$03,$00,$03,$00,$03,$16,$03,$00,$00,$00
+  .byte $03,$00,$03,$00,$03,$00,$03,$00,$16,$00,$03,$00,$03,$00,$16,$16
+  .byte $03,$00,$03,$00,$03,$00,$00,$00,$03,$00,$03,$00,$03,$14,$14,$03
+  .byte $03,$00,$03,$14,$03,$00,$16,$00,$03,$00,$03,$00,$00,$14,$00,$03
+  .byte $03,$00,$03,$00,$00,$00,$03,$00,$03,$00,$03,$00,$03,$00,$14,$03
+  .byte $03,$00,$03,$03,$16,$00,$03,$00,$03,$00,$03,$00,$03,$00,$00,$03
+  .byte $03,$00,$16,$00,$03,$03,$03,$00,$03,$00,$03,$00,$03,$00,$14,$03
+  .byte $03,$00,$16,$00,$03,$00,$03,$00,$00,$14,$03,$14,$03,$00,$00,$03
+  .byte $03,$00,$16,$00,$03,$00,$03,$03,$03,$00,$03,$00,$03,$14,$00,$03
+  .byte $03,$00,$16,$00,$03,$00,$03,$14,$03,$00,$03,$00,$03,$03,$03,$03
+  .byte $03,$00,$00,$00,$00,$00,$00,$14,$03,$00,$00,$00,$00,$00,$00,$03
+  .byte $16,$03,$03,$03,$03,$03,$03,$03,$03,$16,$16,$16,$16,$16,$16,$03
+
+bg2:
+  .byte $03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03
+  .byte $03,$00,$00,$00,$00,$00,$03,$16,$14,$00,$00,$00,$00,$00,$00,$00
+  .byte $03,$00,$03,$03,$03,$00,$03,$03,$03,$03,$03,$03,$03,$03,$14,$03
+  .byte $03,$14,$03,$16,$03,$00,$00,$00,$00,$00,$14,$00,$00,$00,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$03,$03,$03,$03,$03,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$00,$00,$00,$00,$03,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$14,$03,$03,$00,$00,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$00,$03,$03,$03,$03,$03,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$00,$03,$14,$00,$00,$00,$03,$00,$03
+  .byte $03,$14,$03,$00,$03,$00,$03,$00,$03,$16,$03,$03,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$00,$03,$03,$03,$03,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$14,$03,$00,$00,$00,$00,$14,$00,$03,$00,$03
+  .byte $03,$00,$03,$00,$03,$00,$03,$03,$03,$03,$03,$03,$03,$03,$00,$03
+  .byte $03,$00,$03,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$03
+  .byte $03,$03,$03,$16,$16,$16,$16,$16,$16,$16,$16,$16,$16,$16,$16,$03
+
+; bg3:
+;   .byte $03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03,$03
+;   .byte $00,$00,$00,$14,$00,$00,$14,$00,$00,$00,$00,$00,$00,$14,$00,$03
+;   .byte $16,$00,$03,$00,$16,$00,$03,$00,$03,$03,$03,$00,$03,$03,$03,$03
+;   .byte $16,$00,$03,$00,$03,$03,$03,$00,$03,$00,$03,$16,$03,$00,$00,$00
+;   .byte $03,$00,$03,$00,$03,$00,$03,$00,$16,$00,$03,$00,$03,$00,$16,$16
+;   .byte $03,$00,$03,$00,$03,$00,$00,$00,$03,$00,$03,$00,$03,$14,$14,$03
+;   .byte $03,$00,$03,$14,$03,$00,$16,$00,$03,$00,$03,$00,$00,$14,$00,$03
+;   .byte $03,$00,$03,$00,$00,$00,$03,$00,$03,$00,$03,$00,$03,$00,$14,$03
+;   .byte $03,$00,$03,$03,$16,$00,$03,$00,$03,$00,$03,$00,$03,$00,$00,$03
+;   .byte $03,$00,$16,$00,$03,$03,$03,$00,$03,$00,$03,$00,$03,$00,$14,$03
+;   .byte $03,$00,$16,$00,$03,$00,$03,$00,$00,$14,$03,$14,$03,$00,$00,$03
+;   .byte $03,$00,$16,$00,$03,$00,$03,$03,$03,$00,$03,$00,$03,$14,$00,$03
+;   .byte $03,$00,$16,$00,$03,$00,$03,$14,$03,$00,$03,$00,$03,$03,$03,$03
+;   .byte $03,$00,$00,$00,$00,$00,$00,$14,$03,$00,$00,$00,$00,$00,$00,$03
+;   .byte $16,$03,$03,$03,$03,$03,$03,$03,$03,$16,$16,$16,$16,$16,$16,$03
+
+attribute:
+	.byte $aa,$aa,$aa,$ea,$8a,$aa,$aa,$aa,$2a,$ea,$aa,$aa,$aa,$8a,$aa,$a8
+	.byte $aa,$aa,$aa,$aa,$aa,$aa,$aa,$aa,$aa,$aa,$aa,$a2,$aa,$aa,$aa,$aa
+	.byte $2a,$aa,$aa,$aa,$e2,$aa,$aa,$aa,$aa,$aa,$2a,$aa,$aa,$2a,$aa,$aa
+	.byte $aa,$aa,$aa,$aa,$aa,$aa,$aa,$aa,$0a,$0e,$0f,$0f,$0f,$0f,$0f,$0b
+attribute1:
+  .byte $aa,$2a,$aa,$8a,$aa,$aa,$2a,$aa,$bb,$aa,$ab,$aa,$aa,$ea,$aa,$aa
+	.byte $aa,$aa,$aa,$aa,$ab,$aa,$2a,$8f,$aa,$a2,$aa,$ab,$aa,$aa,$a2,$8a
+	.byte $aa,$ba,$ab,$aa,$aa,$aa,$aa,$8a,$aa,$bb,$aa,$aa,$a2,$a2,$2a,$aa
+	.byte $aa,$ab,$aa,$22,$aa,$aa,$aa,$aa,$0b,$0a,$0a,$0a,$0e,$0f,$0f,$0b
+attribute2:
+	.byte $aa,$2a,$aa,$8a,$aa,$aa,$2a,$aa,$bb,$aa,$ab,$aa,$aa,$ea,$aa,$aa
+	.byte $aa,$aa,$aa,$aa,$ab,$aa,$2a,$8f,$aa,$a2,$aa,$ab,$aa,$aa,$a2,$8a
+	.byte $aa,$ba,$ab,$aa,$aa,$aa,$aa,$8a,$aa,$bb,$aa,$aa,$a2,$a2,$2a,$aa
+	.byte $aa,$ab,$aa,$22,$aa,$aa,$aa,$aa,$0b,$0a,$0a,$0a,$0e,$0f,$0f,$0b
+; attribute3:
+; 	.byte $aa,$2a,$aa,$8a,$aa,$aa,$2a,$aa,$bb,$aa,$ab,$aa,$aa,$ea,$aa,$aa
+; 	.byte $aa,$aa,$aa,$aa,$ab,$aa,$2a,$8f,$aa,$a2,$aa,$ab,$aa,$aa,$a2,$8a
+; 	.byte $aa,$ba,$ab,$aa,$aa,$aa,$aa,$8a,$aa,$bb,$aa,$aa,$a2,$a2,$2a,$aa
+; 	.byte $aa,$ab,$aa,$22,$aa,$aa,$aa,$aa,$0b,$0a,$0a,$0a,$0e,$0f,$0f,$0b
 .endproc
 
 .proc draw_players
@@ -295,21 +775,34 @@ bg:
   ;here goes else statement later
 
 player1_moving:
+
+    
+
   LDA pad1        ; Load button presses
   AND #BTN_LEFT   ; Filter out all but Left
   BEQ check_right ; If result is zero, left not pressed
   DEC player1_x  ; If the branch is not taken, move player left
+  DEC player1_x
+  DEC player1_x
+
+
   JMP player1_moveleft
   check_right:
     LDA pad1
     AND #BTN_RIGHT
     BEQ check_up
     INC player1_x
+    INC player1_x
+    INC player1_x
+    
+
     JMP player1_moveright
   check_up:
     LDA pad1
     AND #BTN_UP
     BEQ check_down
+    DEC player1_y
+    DEC player1_y
     DEC player1_y
     JMP player1_moveup
   check_down:
@@ -317,9 +810,21 @@ player1_moving:
     AND #BTN_DOWN
     BEQ next
     INC player1_y
+    INC player1_y
+    INC player1_y
+    
+    INC world_selector
+    LDA world_selector
+    CMP #$01
+    BNE nobg
+    JSR main
+    nobg:
     JMP player1_movedown
-    next:
-      JMP exit_subroutine
+    
+
+      ; Add button A
+  next:
+    JMP exit_subroutine
   ; if player1_dir = 00, player is moving down
 
 player1_moveleft:
@@ -573,11 +1078,17 @@ exit_subroutine:
 
 .segment "RODATA"
 palettes:
-;Background color
+;Background color old
+; .byte $0f, $00, $10, $30
+; .byte $0f, $37, $17, $07
+; .byte $0f, $0A, $06, $05
+; .byte $0f, $09, $19, $07
+
 .byte $0f, $00, $10, $30
+.byte $0f, $05, $16, $17
 .byte $0f, $37, $17, $07
-.byte $0f, $0A, $06, $05
-.byte $0f, $09, $19, $07
+.byte $0f, $20, $2D, $3D
+
 ;Character color
 .byte $0f, $2d, $10, $15
 .byte $0f, $30, $26, $17
