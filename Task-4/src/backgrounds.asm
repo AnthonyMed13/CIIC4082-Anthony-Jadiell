@@ -100,7 +100,6 @@
   STA counter
   STA nametable
   JMP skips
-
 set_scroll_positions:
   LDA counter
   CMP #$01
@@ -157,6 +156,7 @@ vblankwait:       ; wait for another vblank before continuing
 
 forever:
   JMP forever
+
 
 .endproc
 
@@ -270,6 +270,7 @@ NoCollision1:
   STA collision
   RTS
   ; Code to continue game logic here
+
 
 .endproc
 
@@ -399,7 +400,6 @@ NoCollision1:
   no_buttons:
     JMP exit_subroutine
   
-
 player1_moving:
 
     
