@@ -16,7 +16,6 @@
   zptemp3: .res 2
   zptemp4: .res 1
   zptemp5: .res 1
-  tenp: .res 1
   world_selector: .res 1
 	player1_x: .res 1
   player1_cs: .res 1
@@ -28,6 +27,7 @@
 	player1_llt : .res 1
 	player1_lrt : .res 1
 	frame_counter1 : .res 1
+  frame_counter2 : .res 1
   scroll: .res 1
   ppuctrl_settings: .res 1
   pad1: .res 1
@@ -65,56 +65,33 @@
       LDA #%00011110  ; turn on screen
       STA PPUMASK
       LDA #$00
-      STA PPUSCROLL
-      STA PPUSCROLL
       STA scroll
+      STA PPUSCROLL
+      STA PPUSCROLL
       STA nametable
       LDA #$00
       STA player1_x
+      STA collision
       STA counter
       LDA #$20
       STA player1_y
       INC world_selector
   ness:
-  LDA player1_x
 
-  JSR read_controller1
-  JSR update_player1
-  JSR draw_players
+LDA player1_x
+JSR read_controller1
+JSR update_player1
+JSR draw_players
 
 
-  LDA scroll
-  CMP #$FF ; did we scroll to the end of a nametable?
-  BNE set_scroll_positions
-  ; if yes,
-  ; maintain the second nametable
-  LDA ppuctrl_settings
-  ORA #%00000001 ; Ensure bit #1 remains 1, staying at the second nametable
-  STA ppuctrl_settings
-  STA PPUCTRL
-  LDA #$00
-  STA scroll
-  STA PPUSCROLL
-  STA PPUSCROLL
-  LDA #$01
-  STA counter
-  STA nametable
-  JMP skips
-set_scroll_positions:
-  LDA counter
-  CMP #$01
-  BEQ skips
-  INC scroll
-  LDA scroll ; X scroll first
-  STA PPUSCROLL
-  LDA #$00 ; then Y scroll
-  STA PPUSCROLL
-
-  RTI
-skips:
+ski:
   RTI
 
 .endproc
+
+
+
+
 
 .import reset_handler
 
@@ -123,6 +100,7 @@ skips:
   LDA #$00
   STA scroll
   STA counter
+  LDA player1_x
 
   ; write a palette
   LDX PPUSTATUS
@@ -324,20 +302,6 @@ NoCollision1:
   SBC scroll
   STA $0203
   
-
-  ; top right tile (x + 8):
-  LDA player1_y
-  STA $0204
-
-
-  LDA player1_x
-  CLC
-  ADC #$08
-  SEC 
-  SBC scroll
-  STA $0207
-
-
   ; bottom left tile (y + 8):
   LDA player1_y
   CLC
@@ -347,6 +311,20 @@ NoCollision1:
   SEC 
   SBC scroll
   STA $020b
+
+  
+  ; top right tile (x + 8):
+  LDA player1_y
+  STA $0204
+  LDA player1_x
+  CLC
+  ADC #$08
+  SEC 
+  SBC scroll
+  STA $0207
+
+
+
 
   ; bottom right tile (x + 8, y + 8)
   LDA player1_y
@@ -361,8 +339,8 @@ NoCollision1:
   SBC scroll
   STA $020f
 
-
-
+  no_draw:
+  
   ;Retrieve values from stack
   PLA
   TAY
@@ -411,7 +389,13 @@ player1_moving:
   LDA player1_x
   CLC
   SBC #$01      ; Load the player's X coordinate
-  STA TempX        ; Store in TempX
+  STA TempX
+  BCC change_nametable1
+  JMP dont_change1
+  change_nametable1:
+  LDA #$00
+  STA nametable
+  dont_change1:         ; Store in TempX
 
   LDA player1_y      ; Load the player's X coordinate    
   STA TempY 
@@ -436,21 +420,31 @@ player1_moving:
   CMP #$01
   BEQ nomove2
 
-  LDA slowness
-  CMP #$02
-  BNE noslow
-  DEC player1_x  ; If the branch is not taken, move player left
-  DEC player1_x
-  DEC player1_x  ; If the branch is not taken, move player left
-  DEC player1_x
-  JMP nomove2
-  LDA#$00
-  STA slowness
   noslow:
+  LDA scroll
+  CMP #$FF
+  BEQ no_scroll
+  DEC scroll
+  DEC scroll
+  DEC scroll
+  DEC scroll
+  DEC scroll
+  LDA scroll
+  STA PPUSCROLL
+  LDA #$00
+  STA PPUSCROLL
+  no_scroll:
   DEC player1_x  ; If the branch is not taken, move player left
   DEC player1_x
   DEC player1_x
   DEC player1_x
+  DEC player1_x  ; If the branch is not taken, move player left
+  DEC player1_x
+  DEC player1_x
+  DEC player1_x
+  LDA player1_x
+  CMP #248
+  BNE nomove2
 
 
   nomove2:
@@ -465,12 +459,12 @@ player1_moving:
     CLC              ; Clear the carry for the addition
     ADC #$10       ; Add 15 to get the right edge of the player
     STA TempX
-    BCS names
-    JMP v
-    names:
+    BCS change_nametable
+    JMP dont_change
+    change_nametable:
     LDA #$01
     STA nametable
-    v:        ; Store in TempX
+    dont_change:        ; Store in TempX
 
     LDA player1_y      ; Load the player's X coordinate    
     STA TempY       ; Store in TempX
@@ -482,7 +476,7 @@ player1_moving:
 
     LDA player1_x      ; Load the player's X coordinate
     CLC              ; Clear the carry for the addition
-    ADC #$10        ; Add 15 to get the right edge of the player
+    ADC #$10      ; Add 15 to get the right edge of the player
     STA TempX        ; Store in TempX
   
     LDA player1_y
@@ -495,11 +489,27 @@ player1_moving:
     CMP #$01
     BEQ nomove
     noslow2:
+    LDA scroll
+    CMP #$FF
+    BEQ no_scroll1
+    INC scroll
+    INC scroll
+    INC scroll
+    INC scroll
+    INC scroll
+    LDA scroll
+    STA PPUSCROLL
+    LDA #$00
+    STA PPUSCROLL
+    no_scroll1:
     INC player1_x
     INC player1_x
     INC player1_x
     INC player1_x
-
+    INC player1_x
+    INC player1_x
+    INC player1_x
+    INC player1_x
     
     nomove:
     JMP player1_moveright
@@ -543,6 +553,10 @@ player1_moving:
     DEC player1_y
     DEC player1_y  ; If the branch is not taken, move player left
     DEC player1_y
+    DEC player1_y  ; If the branch is not taken, move player left
+    DEC player1_y
+    DEC player1_y  ; If the branch is not taken, move player left
+    DEC player1_y
     LDA#$00
     STA slowness
     JMP nomove3
@@ -552,7 +566,10 @@ player1_moving:
     DEC player1_y
     DEC player1_y
     DEC player1_y
-
+    DEC player1_y  ; If the branch is not taken, move player left
+    DEC player1_y
+    DEC player1_y  ; If the branch is not taken, move player left
+    DEC player1_y
 
     nomove3:
 
@@ -595,6 +612,10 @@ player1_moving:
     INC player1_y
     INC player1_y  ; If the branch is not taken, move player left
     INC player1_y
+    INC player1_y  ; If the branch is not taken, move player left
+    INC player1_y
+    INC player1_y  ; If the branch is not taken, move player left
+    INC player1_y
     LDA#$00
     STA slowness
     JMP nomove4
@@ -604,7 +625,10 @@ player1_moving:
     INC player1_y
     INC player1_y
     INC player1_y
-
+    INC player1_y
+    INC player1_y
+    INC player1_y
+    INC player1_y  
     nomove4:
     JMP player1_movedown
   check_A:
