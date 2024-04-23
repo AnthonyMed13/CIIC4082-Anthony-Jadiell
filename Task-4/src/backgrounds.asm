@@ -32,8 +32,22 @@
   ppuctrl_settings: .res 1
   pad1: .res 1
   nametable: .res 1
+  clock_frames: .res 1
+  clock: .res 1
+  clock_hundreds1: .res 1
+  clock_hundreds2: .res 1
+  clock_tens1: .res 1
+  clock_tens2: .res 1
+  clock_units1: .res 1
+  clock_units2: .res 1
+  clock_pos: .res 1
+  clock_h: .res 1
+  clock_t: .res 1
+  clock_u: .res 1
+  clock_temp: .res 1
+  total_time: .res 1
 	.exportzp player1_x, player1_y, player1_dir, player1_ws, player1_cs, player1_ult, player1_urt, player1_llt, player1_lrt
-	.exportzp frame_counter1, pad1, world_selector, zptemp, zptemp2,zptemp3, scroll
+	.exportzp frame_counter1, pad1, world_selector, zptemp, zptemp2,zptemp3, scroll, clock, clock_frames, clock_pos, clock_hundreds1, clock_hundreds2, clock_tens1, clock_tens2, clock_units1, clock_units2, total_time
   .export tile_map, tile_map1, tile_map2, tile_map3, attribute, attribute1, attribute2, attribute3
 .segment "CODE"
 
@@ -50,11 +64,28 @@
   LDA #$02
   STA OAMDMA
 
+  LDA player1_x
+  CMP #$f0
+  BEQ check_finish
+  JMP start
+
+  check_finish:
+  LDA player1_y
+  CMP #$20
+  BEQ continues
+
+  start:
 ; read controller
   LDA world_selector
   CMP #$01
   BNE ness
   continues:
+  LDA #$B4
+  SBC clock 
+  STA total_time
+  LDA #$B4
+  STA clock
+
     lda #$00
     sta $2000
     sta $2001
@@ -82,7 +113,9 @@ LDA player1_x
 JSR read_controller1
 JSR update_player1
 JSR draw_players
-
+JSR draw_clock
+JSR update_clock
+JSR update_clock_tiles
 
 ski:
   RTI
@@ -886,6 +919,412 @@ increase_counter:
   INC frame_counter1
 exit_subroutine:
   ; all done, clean up and return
+  PLA
+  TAY
+  PLA
+  TAX
+  PLA
+  PLP
+  RTS
+.endproc
+
+  .proc draw_clock
+;Save values on stack
+  PHP
+  PHA
+  TXA
+  PHA
+  TYA
+  PHA
+
+  ;Tiles of clock
+  LDA clock_hundreds1
+  STA $0211
+  LDA clock_hundreds2
+  STA $0215
+  LDA clock_tens1
+  STA $0219
+  LDA clock_tens2
+  STA $021d
+  LDA clock_units1
+  STA $0221
+  LDA clock_units2
+  STA $0225
+
+ 
+  ; write clock tile attributes
+  ; use palette 01
+  LDA #$21
+  STA $0212
+  STA $0216
+  STA $021a
+  STA $021e
+  STA $0222
+  STA $0226
+
+
+  ; top left tile:
+  LDA #$00
+  STA $0210
+  LDA clock_pos
+  STA $0213
+  
+    ; bottom left tile (y + 8):
+  LDA #$08
+  STA $0214
+  LDA clock_pos
+  STA $0217
+
+  ; top middle tile (x + 8):
+  LDA #$00
+  STA $0218
+  LDA clock_pos
+  CLC
+  ADC #$08
+  STA $021b
+
+
+  ; bottom middle tile (x + 8, y + 8)
+  LDA #$08
+  STA $021c
+
+  LDA clock_pos
+  CLC
+  ADC #$08
+  STA $021f
+
+  ; top right tile (x + 16):
+  LDA #$00
+  STA $0220
+  LDA clock_pos
+  CLC
+  ADC #$10
+  STA $0223
+
+  ; bottom right tile (x + 16, y + 8)
+  LDA #$08
+  STA $0224
+
+  LDA clock_pos
+  CLC
+  ADC #$10
+  STA $0227
+
+
+  ;Retrieve values from stack
+  PLA
+  TAY
+  PLA
+  TAX
+  PLA
+  PLP
+  RTS
+.endproc
+
+.proc update_clock
+  PHP
+  PHA
+  TXA
+  PHA
+  TYA
+  PHA
+
+  LDA clock
+  CMP #$00
+  BEQ end_subroutine
+  LDA clock_frames
+  CMP #$3C
+  BEQ restart_counter
+  INC clock_frames
+  JMP end_subroutine
+
+  restart_counter:
+  LDA #$00
+  STA clock_frames
+  DEC clock
+
+
+  end_subroutine:
+  PLA
+  TAY
+  PLA
+  TAX
+  PLA
+  PLP
+  RTS
+.endproc
+
+.proc update_clock_tiles
+  PHP
+  PHA
+  TXA
+  PHA
+  TYA
+  PHA
+
+LDA clock
+STA clock_temp
+    
+    ; Calculate the hundreds digit
+LDX #$00          ; Clear X register
+STX clock_h     ; Clear the 'hundreds' variable
+divide_by_100:
+INX
+SEC               ; Set carry flag
+SBC #$64          ; Subtract 100 from the accumulator
+BPL divide_by_100 ; If carry is clear, continue subtraction
+DEX
+STX clock_h
+
+LDA clock_h
+CMP #$00
+BEQ continue_tens
+sub_hundreds:
+LDA clock_temp
+SBC #$64  
+STA clock_temp
+DEX      
+TXA 
+CMP #$00
+BNE sub_hundreds
+    
+; Calculate the tens digit
+continue_tens:
+LDX #$00        
+STX clock_t  
+LDA clock_temp    
+divide_by_10:
+INX
+SEC               ; Set carry flag
+SBC #$0A          ; Subtract 10 from the accumulator
+BPL divide_by_10  ; If carry is clear, continue subtraction
+DEX               ; Increment X (counts the tens digit            ; Load the tens digit from X
+STX clock_t         ; Store the tens digit in the 'tens' variable
+
+
+LDA clock_t
+CMP #$00
+BEQ continue_units
+sub_tens:
+LDA clock_temp
+SBC #$0A
+STA clock_temp
+DEX      
+TXA 
+CMP #$00
+BNE sub_tens
+    
+continue_units:
+LDA clock_temp
+STA clock_u    
+
+
+LDA clock_u
+CMP #$00
+BEQ units0
+CMP #$01
+BEQ units1
+CMP #$02
+BEQ units2
+CMP #$03
+BEQ units3
+CMP #$04
+BEQ units4
+CMP #$05
+BEQ units5
+CMP #$06
+BEQ units6
+CMP #$07
+BEQ units7
+CMP #$08
+BEQ units8
+
+LDA #$4A
+STA clock_units1
+LDA #$5A
+STA clock_units2
+JMP change_tens
+
+units0:
+LDA #$41
+STA clock_units1
+LDA #$51
+STA clock_units2
+JMP change_tens
+
+units1:
+LDA #$42
+STA clock_units1
+LDA #$52
+STA clock_units2
+JMP change_tens
+
+units2:
+LDA #$43
+STA clock_units1
+LDA #$53
+STA clock_units2
+JMP change_tens
+
+units3:
+LDA #$44
+STA clock_units1
+LDA #$54
+STA clock_units2
+JMP change_tens
+
+units4:
+LDA #$45
+STA clock_units1
+LDA #$55
+STA clock_units2
+JMP change_tens
+
+units5:
+LDA #$46
+STA clock_units1
+LDA #$56
+STA clock_units2
+JMP change_tens
+
+units6:
+LDA #$47
+STA clock_units1
+LDA #$57
+STA clock_units2
+JMP change_tens
+
+units7:
+LDA #$48
+STA clock_units1
+LDA #$58
+STA clock_units2
+JMP change_tens
+
+units8:
+LDA #$49
+STA clock_units1
+LDA #$59
+STA clock_units2
+JMP change_tens
+
+change_tens:
+LDA clock_t
+CMP #$00
+BEQ tens0
+CMP #$01
+BEQ tens1
+CMP #$02
+BEQ tens2
+CMP #$03
+BEQ tens3
+CMP #$04
+BEQ tens4
+CMP #$05
+BEQ tens5
+CMP #$06
+BEQ tens6
+CMP #$07
+BEQ tens7
+CMP #$08
+BEQ tens8
+
+LDA #$4A
+STA clock_tens1
+LDA #$5A
+STA clock_tens2
+JMP change_hundreds
+
+tens0:
+LDA #$41
+STA clock_tens1
+LDA #$51
+STA clock_tens2
+JMP change_hundreds
+
+tens1:
+LDA #$42
+STA clock_tens1
+LDA #$52
+STA clock_tens2
+JMP change_hundreds
+
+tens2:
+LDA #$43
+STA clock_tens1
+LDA #$53
+STA clock_tens2
+JMP change_hundreds
+
+tens3:
+LDA #$44
+STA clock_tens1
+LDA #$54
+STA clock_tens2
+JMP change_hundreds
+
+tens4:
+LDA #$45
+STA clock_tens1
+LDA #$55
+STA clock_tens2
+JMP change_hundreds
+
+tens5:
+LDA #$46
+STA clock_tens1
+LDA #$56
+STA clock_tens2
+JMP change_hundreds
+
+tens6:
+LDA #$47
+STA clock_tens1
+LDA #$57
+STA clock_tens2
+JMP change_hundreds
+
+tens7:
+LDA #$48
+STA clock_tens1
+LDA #$58
+STA clock_tens2
+JMP change_hundreds
+
+tens8:
+LDA #$49
+STA clock_tens1
+LDA #$59
+STA clock_tens2
+JMP change_hundreds
+
+change_hundreds:
+LDA clock_h
+CMP #$00
+BEQ hundreds0
+CMP #$01
+BEQ hundreds1
+
+LDA #$43
+STA clock_hundreds1
+LDA #$53
+STA clock_hundreds2
+JMP end_subroutine
+
+hundreds0:
+LDA #$41
+STA clock_hundreds1
+LDA #$51
+STA clock_hundreds2
+JMP end_subroutine
+
+hundreds1:
+LDA #$42
+STA clock_hundreds1
+LDA #$52
+STA clock_hundreds2
+
+  end_subroutine:
   PLA
   TAY
   PLA
