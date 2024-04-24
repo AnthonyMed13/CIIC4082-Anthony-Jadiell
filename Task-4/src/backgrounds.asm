@@ -40,14 +40,15 @@
   clock_tens2: .res 1
   clock_units1: .res 1
   clock_units2: .res 1
-  clock_pos: .res 1
+  clock_posx: .res 1
+  clock_posy: .res 1
   clock_h: .res 1
   clock_t: .res 1
   clock_u: .res 1
   clock_temp: .res 1
   total_time: .res 1
 	.exportzp player1_x, player1_y, player1_dir, player1_ws, player1_cs, player1_ult, player1_urt, player1_llt, player1_lrt
-	.exportzp frame_counter1, pad1, world_selector, zptemp, zptemp2,zptemp3, scroll, clock, clock_frames, clock_pos, clock_hundreds1, clock_hundreds2, clock_tens1, clock_tens2, clock_units1, clock_units2, total_time
+	.exportzp frame_counter1, pad1, world_selector, zptemp, zptemp2,zptemp3, scroll, clock, clock_frames, clock_posx, clock_posy, clock_hundreds1, clock_hundreds2, clock_tens1, clock_tens2, clock_units1, clock_units2, total_time
   .export tile_map, tile_map1, tile_map2, tile_map3, attribute, attribute1, attribute2, attribute3
 .segment "CODE"
 
@@ -79,11 +80,13 @@
   LDA world_selector
   CMP #$01
   BNE ness
+
   continues:
-  LDA #$B4
-  SBC clock 
+  LDA clock
   STA total_time
-  LDA #$B4
+  CMP #$00
+  BEQ game_over
+  LDA #$78
   STA clock
 
     lda #$00
@@ -109,6 +112,21 @@
       INC world_selector
   ness:
 
+LDA clock
+CMP #$00
+BEQ game_over
+
+LDA player1_x
+  CMP #$f0
+  BEQ check_victory
+  JMP keep_going
+
+  check_victory:
+  LDA player1_y
+  CMP #$50
+  BEQ victory
+
+keep_going:
 LDA player1_x
 JSR read_controller1
 JSR update_player1
@@ -116,6 +134,26 @@ JSR draw_players
 JSR draw_clock
 JSR update_clock
 JSR update_clock_tiles
+JMP ski
+
+game_over:
+JSR draw_gameover
+JSR draw_clock
+JMP ski
+
+victory:
+JSR draw_victory
+LDA clock
+ADC total_time
+STA total_time
+LDA #$f0
+SBC total_time
+STA clock 
+LDA #$74
+STA clock_posx
+LDA #$B0
+STA clock_posy
+JSR draw_clock
 
 ski:
   RTI
@@ -964,48 +1002,54 @@ exit_subroutine:
 
 
   ; top left tile:
-  LDA #$00
+  LDA clock_posy
   STA $0210
-  LDA clock_pos
+  LDA clock_posx
   STA $0213
   
     ; bottom left tile (y + 8):
-  LDA #$08
+  LDA clock_posy
+  CLC
+  ADC #$08
   STA $0214
-  LDA clock_pos
+  LDA clock_posx
   STA $0217
 
   ; top middle tile (x + 8):
-  LDA #$00
+  LDA clock_posy
   STA $0218
-  LDA clock_pos
+  LDA clock_posx
   CLC
   ADC #$08
   STA $021b
 
 
   ; bottom middle tile (x + 8, y + 8)
-  LDA #$08
+  LDA clock_posy
+  CLC
+  ADC #$08
   STA $021c
 
-  LDA clock_pos
+  LDA clock_posx
   CLC
   ADC #$08
   STA $021f
 
   ; top right tile (x + 16):
-  LDA #$00
+  LDA clock_posy
   STA $0220
-  LDA clock_pos
+  LDA clock_posx
   CLC
   ADC #$10
   STA $0223
 
   ; bottom right tile (x + 16, y + 8)
-  LDA #$08
+  LDA clock_posy
+  CLC
+  ADC #$08
   STA $0224
 
-  LDA clock_pos
+  LDA clock_posx
   CLC
   ADC #$10
   STA $0227
@@ -1325,6 +1369,633 @@ LDA #$52
 STA clock_hundreds2
 
   end_subroutine:
+  PLA
+  TAY
+  PLA
+  TAX
+  PLA
+  PLP
+  RTS
+.endproc
+
+  .proc draw_gameover
+;Save values on stack
+  PHP
+  PHA
+  TXA
+  PHA
+  TYA
+  PHA
+
+  ;Tiles values
+  LDA #$61
+  ;STA $0211
+  STA $0229
+  LDA #$62
+  STA $022D
+  LDA #$63
+  STA $0231
+  LDA #$64
+  STA $0235
+  LDA #$65
+  STA $0239
+  LDA #$66
+  STA $023D
+  LDA #$67
+  STA $0241
+  LDA #$68
+  STA $0245
+
+  LDA #$71
+  STA $0249
+  LDA #$72
+  STA $024D
+  LDA #$73
+  STA $0251
+  LDA #$74
+  STA $0255
+  LDA #$75
+  STA $0259
+  LDA #$76
+  STA $025D
+  LDA #$77
+  STA $0261
+  LDA #$78
+  STA $0265
+
+  LDA #$81
+  STA $0269
+  LDA #$82
+  STA $026D
+  LDA #$83
+  STA $0271
+  LDA #$84
+  STA $0275
+  LDA #$67
+  STA $0279
+  LDA #$68
+  STA $027D
+  LDA #$85
+  STA $0281
+  LDA #$86
+  STA $0285
+
+  LDA #$91
+  STA $0289
+  LDA #$92
+  STA $028D
+  LDA #$93
+  STA $0291
+  LDA #$94
+  STA $0295
+  LDA #$77
+  STA $0299
+  LDA #$78
+  STA $029D
+  LDA #$95
+  STA $02A1
+  LDA #$96
+  STA $02A5
+
+ 
+  ; write tile attributes
+  ; use palette 01
+  LDA #$21
+  ;STA $0212
+  STA $022A
+  STA $022E
+  STA $0232
+  STA $0236
+  STA $023a
+  STA $023e
+  STA $0242
+  STA $0246
+
+  STA $024a
+  STA $024e
+  STA $0252
+  STA $0256
+  STA $025a
+  STA $025e
+  STA $0262
+  STA $0266
+
+  STA $026a
+  STA $026e
+  STA $0272
+  STA $0276
+  STA $027a
+  STA $027e
+  STA $0282
+  STA $0286
+
+  STA $028a
+  STA $028e
+  STA $0292
+  STA $0296
+  STA $029a
+  STA $029e
+  STA $02a2
+  STA $02a6
+
+
+  LDA #$70
+  STA $0228
+  LDA #$60
+  STA $022b
+  
+  LDA #$70
+  STA $022c
+  LDA #$68
+  STA $022f
+
+  LDA #$70
+  STA $0230
+  LDA #$70
+  STA $0233
+
+  LDA #$70
+  STA $0234
+  LDA #$78
+  STA $0237
+
+  LDA #$70
+  STA $0238
+  LDA #$80
+  STA $023b
+  
+  LDA #$70
+  STA $023c
+  LDA #$88
+  STA $023f
+
+  LDA #$70
+  STA $0240
+  LDA #$90
+  STA $0243
+
+  LDA #$70
+  STA $0244
+  LDA #$98
+  STA $0247
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  LDA #$78
+  STA $0248
+  LDA #$60
+  STA $024b
+  
+  LDA #$78
+  STA $024c
+  LDA #$68
+  STA $024f
+
+  LDA #$78
+  STA $0250
+  LDA #$70
+  STA $0253
+
+  LDA #$78
+  STA $0254
+  LDA #$78
+  STA $0257
+
+  LDA #$78
+  STA $0258
+  LDA #$80
+  STA $025b
+  
+  LDA #$78
+  STA $025c
+  LDA #$88
+  STA $025f
+
+  LDA #$78
+  STA $0260
+  LDA #$90
+  STA $0263
+
+  LDA #$78
+  STA $0264
+  LDA #$98
+  STA $0267
+
+  ;;;;;;;;;;;;;;;;;;;;;
+
+  LDA #$80
+  STA $0268
+  LDA #$60
+  STA $026b
+  
+  LDA #$80
+  STA $026c
+  LDA #$68
+  STA $026f
+
+  LDA #$80
+  STA $0270
+  LDA #$70
+  STA $0273
+
+  LDA #$80
+  STA $0274
+  LDA #$78
+  STA $0277
+
+  LDA #$80
+  STA $0278
+  LDA #$80
+  STA $027b
+  
+  LDA #$80
+  STA $027c
+  LDA #$88
+  STA $027f
+
+  LDA #$80
+  STA $0280
+  LDA #$90
+  STA $0283
+
+  LDA #$80
+  STA $0284
+  LDA #$98
+  STA $0287
+
+  ;;;;;;;;;;;;;;;;;;;
+
+  LDA #$88
+  STA $0288
+  LDA #$60
+  STA $028b
+  
+  LDA #$88
+  STA $028c
+  LDA #$68
+  STA $028f
+
+  LDA #$88
+  STA $0290
+  LDA #$70
+  STA $0293
+
+  LDA #$88
+  STA $0294
+  LDA #$78
+  STA $0297
+
+  LDA #$88
+  STA $0298
+  LDA #$80
+  STA $029b
+  
+  LDA #$88
+  STA $029c
+  LDA #$88
+  STA $029f
+
+  LDA #$88
+  STA $02a0
+  LDA #$90
+  STA $02a3
+
+  LDA #$88
+  STA $02a4
+  LDA #$98
+  STA $02a7
+
+  ;Retrieve values from stack
+  PLA
+  TAY
+  PLA
+  TAX
+  PLA
+  PLP
+  RTS
+.endproc
+
+.proc draw_victory
+;Save values on stack
+  PHP
+  PHA
+  TXA
+  PHA
+  TYA
+  PHA
+
+  ;Tiles values
+  LDA #$A5
+  STA $0229
+  LDA #$A6
+  STA $022D
+  LDA #$81
+  STA $0231
+  LDA #$82
+  STA $0235
+  LDA #$A1
+  STA $0239
+  LDA #$A2
+  STA $023D
+
+  LDA #$B5
+  STA $0241
+  LDA #$B6
+  STA $0245
+  LDA #$91
+  STA $0249
+  LDA #$92
+  STA $024D
+  LDA #$B1
+  STA $0251
+  LDA #$B2
+  STA $0255
+
+  LDA #$65
+  STA $0259
+  LDA #$66
+  STA $025D
+  LDA #$63
+  STA $0261
+  LDA #$64
+  STA $0265
+  LDA #$A7
+  STA $0269
+  LDA #$A8
+  STA $026D
+  LDA #$67
+  STA $0271
+  LDA #$68
+  STA $0275
+
+
+  LDA #$75
+  STA $0279
+  LDA #$76
+  STA $027D
+  LDA #$73
+  STA $0281
+  LDA #$74
+  STA $0285
+  LDA #$B7
+  STA $0289
+  LDA #$B8
+  STA $028D
+  LDA #$77
+  STA $0291
+  LDA #$78
+  STA $0295
+
+
+  LDA #$87
+  STA $0299
+  LDA #$88
+  STA $029D
+  LDA #$a3
+  STA $02A1
+  LDA #$A4
+  STA $02A5
+
+  LDA #$97
+  STA $02A9
+  LDA #$98
+  STA $02AD
+  LDA #$B3
+  STA $02B1
+  LDA #$B4
+  STA $02B5
+
+ 
+  ; write tile attributes
+  ; use palette 01
+  LDA #$21
+  ;STA $0212
+  STA $022A
+  STA $022E
+  STA $0232
+  STA $0236
+  STA $023a
+  STA $023e
+  STA $0242
+  STA $0246
+
+  STA $024a
+  STA $024e
+  STA $0252
+  STA $0256
+  STA $025a
+  STA $025e
+  STA $0262
+  STA $0266
+
+  STA $026a
+  STA $026e
+  STA $0272
+  STA $0276
+  STA $027a
+  STA $027e
+  STA $0282
+  STA $0286
+
+  STA $028a
+  STA $028e
+  STA $0292
+  STA $0296
+  STA $029a
+  STA $029e
+  STA $02a2
+  STA $02a6
+
+  STA $02aa
+  STA $02ae
+  STA $02b2
+  STA $02b6
+
+;;;;;;;;;;;;;;;;;;;;;
+  LDA #$60
+  STA $0228
+  LDA #$68
+  STA $022b
+  
+  LDA #$60
+  STA $022c
+  LDA #$70
+  STA $022f
+
+  LDA #$60
+  STA $0230
+  LDA #$78
+  STA $0233
+
+  LDA #$60
+  STA $0234
+  LDA #$80
+  STA $0237
+
+  LDA #$60
+  STA $0238
+  LDA #$88
+  STA $023b
+  
+  LDA #$60
+  STA $023c
+  LDA #$90
+  STA $023f
+
+  LDA #$68
+  STA $0240
+  LDA #$68
+  STA $0243
+
+  LDA #$68
+  STA $0244
+  LDA #$70
+  STA $0247
+
+  LDA #$68
+  STA $0248
+  LDA #$78
+  STA $024b
+  
+  LDA #$68
+  STA $024c
+  LDA #$80
+  STA $024f
+
+  LDA #$68
+  STA $0250
+  LDA #$88
+  STA $0253
+
+  LDA #$68
+  STA $0254
+  LDA #$90
+  STA $0257
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  LDA #$70
+  STA $0258
+  LDA #$60
+  STA $025b
+  
+  LDA #$70
+  STA $025c
+  LDA #$68
+  STA $025f
+
+  LDA #$70
+  STA $0260
+  LDA #$70
+  STA $0263
+
+  LDA #$70
+  STA $0264
+  LDA #$78
+  STA $0267
+
+  LDA #$70
+  STA $0268
+  LDA #$80
+  STA $026b
+  
+  LDA #$70
+  STA $026c
+  LDA #$88
+  STA $026f
+
+  LDA #$70
+  STA $0270
+  LDA #$90
+  STA $0273
+
+  LDA #$70
+  STA $0274
+  LDA #$98
+  STA $0277
+
+  LDA #$78
+  STA $0278
+  LDA #$60
+  STA $027b
+  
+  LDA #$78
+  STA $027c
+  LDA #$68
+  STA $027f
+
+  LDA #$78
+  STA $0280
+  LDA #$70
+  STA $0283
+
+  LDA #$78
+  STA $0284
+  LDA #$78
+  STA $0287
+
+  LDA #$78
+  STA $0288
+  LDA #$80
+  STA $028b
+  
+  LDA #$78
+  STA $028c
+  LDA #$88
+  STA $028f
+
+  LDA #$78
+  STA $0290
+  LDA #$90
+  STA $0293
+
+  LDA #$78
+  STA $0294
+  LDA #$98
+  STA $0297
+
+  ;;;;;;;;;;;;;;;;;;
+
+  LDA #$80
+  STA $0298
+  LDA #$70
+  STA $029b
+  
+  LDA #$80
+  STA $029c
+  LDA #$78
+  STA $029f
+
+  LDA #$80
+  STA $02a0
+  LDA #$80
+  STA $02a3
+
+  LDA #$80
+  STA $02a4
+  LDA #$88
+  STA $02a7
+
+  LDA #$88
+  STA $02a8
+  LDA #$70
+  STA $02ab
+  
+  LDA #$88
+  STA $02ac
+  LDA #$78
+  STA $02af
+
+  LDA #$88
+  STA $02b0
+  LDA #$80
+  STA $02a3
+
+  LDA #$88
+  STA $02b4
+  LDA #$88
+  STA $02b7
+
+  ;Retrieve values from stack
   PLA
   TAY
   PLA

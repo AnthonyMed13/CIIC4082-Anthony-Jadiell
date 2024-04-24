@@ -3,7 +3,7 @@
 .segment "ZEROPAGE"
 .importzp player1_x, player1_y, player2_x, player2_y, player3_x, player3_y, player4_x, player4_y, player1_dir, player2_dir, player3_dir, player4_dir, player1_ws, player2_ws, player3_ws, player4_ws, player1_cs, player2_cs, player3_cs, player4_cs, player1_ult, player1_urt, player1_llt, player1_lrt,player2_ult, player2_urt, player2_llt, player2_lrt, player3_ult, player3_urt, player3_llt, player3_lrt
 .importzp player4_ult, player4_urt, player4_llt, player4_lrt, frame_counter1, frame_counter2, frame_counter3, frame_counter4, world_selector, bottomR_x, bottomR_y, topR_x, topR_y
-.importzp clock,clock_frames, clock_hundreds1, clock_hundreds2, clock_tens1, clock_tens2, clock_units1, clock_units2, clock_pos, total_time
+.importzp clock,clock_frames, clock_hundreds1, clock_hundreds2, clock_tens1, clock_tens2, clock_units1, clock_units2, clock_posx, total_time, clock_posy
 .segment "CODE"
 .import main
 .export reset_handler
@@ -58,7 +58,7 @@ vblankwait2:
   LDA #$00
   STA world_selector
 
-  LDA #$B4
+  LDA #$78
   STA clock
   LDA #$00
   STA clock_frames
@@ -75,7 +75,9 @@ vblankwait2:
   LDA #$51
   STA clock_units2
   LDA #$08
-  STA clock_pos
+  STA clock_posx
+  LDA #$00
+  STA clock_posy
   LDA #$00
   STA total_time
 
