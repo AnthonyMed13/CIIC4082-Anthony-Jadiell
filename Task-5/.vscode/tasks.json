@@ -1,0 +1,69 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Assemble backgrounds",
+            "type": "shell",
+            "command": "ca65",
+            "args": ["src/backgrounds.asm"],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            }
+        },
+        {
+            "label": "Assemble backgrounds1",
+            "type": "shell",
+            "command": "ca65",
+            "args": ["src/draw_background.asm"],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            }
+        },
+        {
+            "label": "Assemble backgrounds2",
+            "type": "shell",
+            "command": "ca65",
+            "args": ["src/draw_background2.asm"],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            }
+        },
+        {
+            "label": "Assemble reset",
+            "type": "shell",
+            "command": "ca65",
+            "args": ["src/reset.asm"],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            }
+        },
+		{
+            "label": "Assemble controllers",
+            "type": "shell",
+            "command": "ca65",
+            "args": ["src/controllers.asm"],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            }
+        },
+        {
+            "label": "Link NES file",
+            "type": "shell",
+            "command": "ld65",
+            "args": ["src/backgrounds.o","src/draw_background.o","src/draw_background2.o", "src/reset.o", "src/controllers.o", "-C", "nes.cfg", "-o", "task5.nes"],
+            "dependsOn": ["Assemble backgrounds", "Assemble controllers", "Assemble reset", "Assemble backgrounds1", "Assemble backgrounds2"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always"
+            }
+        }
+    ]
+}
