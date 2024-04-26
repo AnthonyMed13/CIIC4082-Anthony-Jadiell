@@ -47,9 +47,12 @@
   clock_u: .res 1
   clock_temp: .res 1
   total_time: .res 1
+  end_counter: .res 1
+  temp_posx: .res 1
+  temp_posy: .res 1
 	.exportzp player1_x, player1_y, player1_dir, player1_ws, player1_cs, player1_ult, player1_urt, player1_llt, player1_lrt
 	.exportzp frame_counter1, pad1, world_selector, zptemp, zptemp2,zptemp3, scroll, clock, clock_frames, clock_posx, clock_posy, clock_hundreds1, clock_hundreds2, clock_tens1, clock_tens2, clock_units1, clock_units2, total_time
-  .export tile_map, tile_map1, tile_map2, tile_map3, attribute, attribute1, attribute2, attribute3
+  .export tile_map, tile_map1, tile_map2, tile_map3, attribute, attribute1, attribute2, attribute3, end_counter
 .segment "CODE"
 
 .proc irq_handler
@@ -64,6 +67,10 @@
   STA OAMADDR
   LDA #$02
   STA OAMDMA
+
+  LDA clock
+  CMP #$00
+  BEQ game_over
 
   LDA player1_x
   CMP #$f0
@@ -139,6 +146,7 @@ JMP ski
 game_over:
 JSR draw_gameover
 JSR draw_clock
+JSR draw_death
 JMP ski
 
 victory:
@@ -352,18 +360,7 @@ NoCollision1:
   STA $0206
   STA $020a
   STA $020e
-  STA $0212
-  STA $0216
-  STA $021a
-  STA $021e
-  STA $0222
-  STA $0226
-  STA $022a
-  STA $022e
-  STA $0232
-  STA $0236
-  STA $023a
-  STA $023e
+
 
   ; top left tile:
   LDA player1_y
@@ -412,6 +409,210 @@ NoCollision1:
 
   no_draw:
   
+  ;Retrieve values from stack
+  PLA
+  TAY
+  PLA
+  TAX
+  PLA
+  PLP
+  RTS
+.endproc
+
+.proc draw_death
+;Save values on stack
+  PHP
+  PHA
+  TXA
+  PHA
+  TYA
+  PHA
+
+  LDA player1_x
+  STA temp_posx
+  LDA player1_y
+  STA temp_posy
+  LDA #$ff
+  STA $0201
+  STA $0205
+  STA $0209
+  STA $020D
+  LDA end_counter
+  CMP #$00
+  BEQ stage1
+  CMP #$14
+  BEQ stage2
+  CMP #$28
+  BEQ bridge
+  JMP end_subroutine
+
+  stage1:
+  ;Tiles of player1
+  LDA #$2B
+  STA $02A9
+  LDA #$2C
+  STA $02AD
+  LDA #$3B
+  STA $02B1
+  LDA #$3C
+  STA $02B5
+
+  ; write player tile attributes
+  ; use palette 01
+  LDA #$21
+  STA $02AA
+  STA $02AE
+  STA $02B2
+  STA $02B6
+
+  ; top left tile:
+  LDA temp_posy
+  STA $02A8
+  LDA temp_posx
+  STA $02AB
+  
+  ; top right tile:
+  LDA temp_posy
+  STA $02AC
+  LDA temp_posx
+  CLC
+  ADC #$08
+  STA $02AF
+
+  
+  ; bottom left tile:
+  LDA temp_posy
+  CLC
+  ADC #$08
+  STA $02B0
+  LDA temp_posx
+  STA $02B3
+
+  ; bottom right tile:
+  LDA temp_posy
+  CLC
+  ADC #$08
+  STA $02B4
+
+  LDA temp_posx
+  CLC 
+  ADC #$08
+  STA $02B7
+  JMP end_subroutine
+
+  bridge:
+  JMP stage3
+  stage2:
+  ;Tiles of player1
+  LDA #$2D
+  STA $02A9
+  LDA #$2E
+  STA $02AD
+  LDA #$3D
+  STA $02B1
+  LDA #$3E
+  STA $02B5
+
+ 
+  ; write player tile attributes
+  ; use palette 01
+  LDA #$21
+  STA $02AA
+  STA $02AE
+  STA $02B2
+  STA $02B6
+
+  ; top left tile:
+  LDA temp_posy
+  STA $02A8
+  LDA temp_posx
+  STA $02AB
+  
+  ; top right tile:
+  LDA temp_posy
+  STA $02AC
+  LDA temp_posx
+  CLC
+  ADC #$08
+  STA $02AF
+
+  
+  ; bottom left tile:
+  LDA temp_posy
+  CLC
+  ADC #$08
+  STA $02B0
+  LDA temp_posx
+  STA $02B3
+
+  ; bottom right tile:
+  LDA temp_posy
+  CLC
+  ADC #$08
+  STA $02B4
+
+  LDA temp_posx
+  CLC
+  ADC #$08
+  STA $02B7
+  JMP end_subroutine
+
+  stage3:
+  ;Tiles of player1
+  LDA #$0D
+  STA $02A9
+  LDA #$0E
+  STA $02AD
+  LDA #$1D
+  STA $02B1
+  LDA #$1E
+  STA $02B5
+
+ 
+  ; write player tile attributes
+  ; use palette 01
+  LDA #$21
+  STA $02AA
+  STA $02AE
+  STA $02B2
+  STA $02B6
+
+  ; top left tile:
+  LDA temp_posy
+  STA $02A8
+  LDA temp_posx
+  STA $02AB
+  
+  ; top right tile:
+  LDA temp_posy
+  STA $02AC
+  LDA temp_posx
+  CLC
+  ADC #$08
+  STA $02AF
+
+  
+  ; bottom left tile:
+  LDA temp_posy
+  CLC
+  ADC #$08
+  STA $02B0
+  LDA temp_posx
+  STA $02B3
+
+  ; bottom right tile:
+  LDA temp_posy
+  CLC
+  ADC #$08
+  STA $02B4
+
+  LDA temp_posx
+  CLC
+  ADC #$08
+  STA $02B7
+  
+  end_subroutine:
+  INC end_counter
   ;Retrieve values from stack
   PLA
   TAY
